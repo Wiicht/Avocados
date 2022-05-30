@@ -1,0 +1,242 @@
+---
+title: "Finales Projekt"
+author: "We R Nerds: Christoph, Luca, Vera"
+date: "27. Mai 2022"
+output:
+  ioslides_presentation:  default
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+```{r setup, include=FALSE}
+library(tidyverse)
+library(haven)
+library(ggplot2)
+library(ggthemes)
+library(stats)
+library(dplyr)
+library(lubridate)
+library(nlme)
+library(knitr)
+library(stargazer)
+
+  
+# B- Lade die Datensätze
+prices <- read.csv('1_Data/prices.csv')
+sales <- read.csv('1_Data/sales.csv')
+```
+## Überblick über Avocado-Datensatz
+<img src="https://image.essen-und-trinken.de/11908670/t/7Y/v9/w960/r1.5/-/1037680--47811-.jpg" alt="Avocado Datensatz" width="780px"/> 
+
+
+```{r, include=FALSE}
+# Zusammenfügen
+prices2 <- prices %>%
+  select(X, AveragePrice)
+prices2
+
+class(sales$SmallMediumAvocado)
+
+# Fator zu charactor
+sales$SmallMediumAvocado <- (as.character(sales$SmallMediumAvocado))
+sales$LargeAvocado <- (as.character(sales$LargeAvocado))
+sales$ExtraLargeAvocado <- (as.character(sales$ExtraLargeAvocado))
+
+class(sales$SmallMediumAvocado)
+
+# löschen von 4046_ (Kategorie)
+sales$SmallMediumAvocado <- str_remove(sales$SmallMediumAvocado, '4046_')
+sales$LargeAvocado <- str_remove(sales$LargeAvocado, '4225_')
+sales$ExtraLargeAvocado <- str_remove(sales$ExtraLargeAvocado, '4770_')
+# konvertieren von charactor zu numeric
+sales$SmallMediumAvocado <- as.numeric(sales$SmallMediumAvocado)
+sales$LargeAvocado <- as.numeric(sales$LargeAvocado)
+sales$ExtraLargeAvocado <- as.numeric(sales$ExtraLargeAvocado)
+class(sales$ExtraLargeAvocado)
+summary(sales)
+
+# Rename X1 von sales zu X
+sales <- sales %>%
+  rename(X = X1)
+
+# Join dataframes
+x <- sales
+x <- as.numeric(sales$Date)
+
+df <- inner_join(sales, prices, by=c('X', 'region', 'Date', 'type'))
+```
+
+## Deskriptive Statistik {.smaller}
+```{r, eval=TRUE, echo=FALSE, fig.width=4, fig.height=3, fig.align="left"}
+## Preisverteilung
+ggplot(data=df, mapping = aes(x=AveragePrice)) +
+  geom_histogram(fill='#2874A6', binwidth =0.07) +
+  theme_minimal() +
+  theme(axis.text.x=element_text(hjust = 1, vjust=0.3)) +
+  labs(x = "Durchschnittspreis", y = "Haeufigkeit", title = "Preisverteilung") +
+  scale_x_continuous(breaks = pretty(df$AveragePrice, n = 20)) +
+  theme(
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank() 
+  ) 
+```
+
+```{r, eval=TRUE, echo=FALSE}
+summary(df$AveragePrice)
+```
+### Verteilung Typ 
+```{r, eval=TRUE, echo=FALSE, figures-side, fig.show="hold", out.width="50%"}
+table(df$type)
+```
+
+## Fragestellung
+```{r, eval=TRUE, echo=FALSE, fig.width=10, fig.height=60, fig.align="center", out.width = "750px"}
+include_graphics(path = "1_Data/aufgabe.png")
+```
+
+### Ansätze
+- Plots
+- Regression
+- Anova
+
+## Einfluss der Regionen auf den Preis
+```{r, eval=TRUE, echo=FALSE, fig.width=8, fig.height=2.75, fig.align="center"}
+ggplot(data=df, aes(x=region)) +
+  geom_bar(fill='#2874A6') +
+  labs(x = "Regionen", y = "Haeufigkeit", title = "Verteilung der Regionen") +
+  theme_minimal() +
+  theme(axis.text.x=element_text(angle = 90, hjust = 1, vjust=0.3))
+
+ggplot(data=df, mapping = aes(x=region, y=AveragePrice)) +
+  geom_boxplot(color='#2874A6') +
+  labs(x = "Region", y = "Durchschnittspreis", title = "Preise nach Regionen") +
+  theme_minimal() +
+  theme(axis.text.x=element_text(angle = 90, hjust = 1, vjust=0.3)) +
+  theme(
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank() 
+  ) 
+```
+
+## Einfluss des Datums auf den Preis
+```{r, eval=TRUE, echo=FALSE, fig.width=8, fig.height=2.75, fig.align="center"}
+# Drop TotalUS from region
+df <- df[df$region != 'TotalUS', ]
+df$Date <- as.Date(df$Date, format = "%d.%m.%y")
+
+months <- mutate(df, Month = factor(format(Date, "%m")))
+
+months_x <- group_by(months, Month) %>%
+  summarise(avg = mean(AveragePrice))
+
+ggplot(data=months_x, mapping = aes(x=Month, y=avg, group = 1)) +
+  geom_line(color="#2874A6", stat = "identity", size = 2) +
+  labs(x = "Monate", y = "Durchschnittspreis", title = "Durchschnittspreis nach Monaten") +
+  theme_minimal() +
+  theme(axis.text.x=element_text(hjust = 1, vjust=0.3))+
+  expand_limits(y = 0) +
+  theme(panel.grid.major.x = element_blank())
+
+ggplot(data=df, mapping = aes(x=Date, y=AveragePrice)) +
+  geom_point(color='#2874A6', alpha = 0.1) +
+  labs(x = "Datum", y = "Durchschnittspreis", title = "Preise nach Datum") +
+  theme_minimal() +
+  theme(axis.text.x=element_text(hjust = 1, vjust=0.3)) +
+  geom_smooth(formula = y ~ x, method = "lm", color = "red") +
+  expand_limits(y = 0) +
+  theme(
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor.y = element_blank()
+  )
+```
+
+## Einfluss der Avocado-Art auf den Preis
+```{r, eval=TRUE, echo=FALSE, fig.width=5, fig.height=2.75, fig.align="center"}
+
+ggplot(data=df, mapping = aes(x=type)) +
+  geom_bar(fill='#2874A6') +
+  theme_minimal() +
+  theme(axis.text.x=element_text(hjust = 0.5)) +
+  labs(x = "Art", y = "Haeufigkeit", title = "Verteilung der Arten") 
+
+ggplot(data=df, mapping = aes(x=type, y = AveragePrice)) +
+  geom_violin(fill='#2874A6', draw_quantiles = c(.25, .50, .75)) +
+  theme_minimal() +
+  theme(axis.text.x=element_text(hjust = 0.5)) +
+  labs(x = "Art", y = "Preis", title = "Preis nach Art") +
+  expand_limits(y = 0) +
+  theme(
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank() 
+  ) 
+```
+
+## Preis und Art für ausgewählte Regionen
+```{r, eval=TRUE, echo=FALSE, fig.width=8, fig.height=5, fig.align="center"}
+df_reg <- df%>%
+  filter(region %in% c("SanFrancisco", "Seattle", "Charlotte", "Houston", "Nashville", "PhoenixTucson"))
+
+ggplot(data=df_reg, mapping = aes(x=reorder(region, -AveragePrice), y = AveragePrice, fill = type)) +
+  geom_boxplot() +
+  theme_minimal() +
+  theme(axis.text.x=element_text(angle = 30, hjust = 1, vjust=1.3)) +
+  labs(x = "Region", y = "Preis", title = "Preis und Art nach Region") +
+  expand_limits(y = 0) +
+  theme(
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank() 
+  ) 
+```
+
+```{r, include=FALSE}
+RegDatum <- lm(AveragePrice ~ Date, data = df)
+RegDatum
+anoDatum <- anova(RegDatum)
+
+RegRegion <- lm(AveragePrice ~ region, data = df)
+anoReg <- anova(RegRegion)
+
+RegTyp <- lm(AveragePrice ~ type, data = df)
+anoTyp <- anova(RegTyp)
+
+RegMult <- lm(AveragePrice ~ type + Date + region, data = df_reg)
+RegMult
+anoMult <- anova(RegMult)
+anoMult
+# anova(forumla = df$AveragePrice ~ df$type)
+
+```
+
+## Regressionsmodelle {.smaller}
+
+```{r, echo=FALSE, results='asis', eval=TRUE, warning=FALSE, message=FALSE}
+stargazer(RegDatum, RegTyp, RegMult, type = "html")
+
+```
+
+## Anovas
+```{r, echo=FALSE, eval=TRUE, warning=FALSE, message=FALSE}
+anoTyp
+anoMult
+```
+
+## Executive Summary
+### Key Points
+- Datum: Herbst
+- Art: Organic
+- Region: San Francisco
+
+### Limitationen
+- Herstellungskosten
+- Nachfrage
+- Lagerkosten
+- Lieferkosten
+- Nachhaltigkeit
+
+## Wish I knew this before
+- Skalenniveaus der Variablen Tüten-Grösse und Avocado-Grösse nicht auswertbar für Fragestellung
+- Umfangreiches Projekt
+- Trial and Error zeitintensiv
+- Details ausschlaggebend
